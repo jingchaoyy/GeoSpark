@@ -1,5 +1,7 @@
 package edu.gmu.stc.vector.shapefile.reader;
 
+import com.amazonaws.util.json.JSONArray;
+import com.amazonaws.util.json.JSONObject;
 import com.vividsolutions.jts.geom.Envelope;
 import com.vividsolutions.jts.geom.Geometry;
 import com.vividsolutions.jts.geom.GeometryFactory;
@@ -13,11 +15,15 @@ import org.apache.hadoop.fs.Path;
 import org.datasyslab.geospark.formatMapper.shapefileParser.parseUtils.dbf.DbfParseUtil;
 import org.datasyslab.geospark.formatMapper.shapefileParser.shapes.PrimitiveShape;
 import org.datasyslab.geospark.formatMapper.shapefileParser.shapes.ShpRecord;
+import org.geotools.data.DefaultTransaction;
 import org.geotools.data.FeatureWriter;
 import org.geotools.data.Transaction;
 import org.geotools.data.shapefile.ShapefileDataStore;
 import org.geotools.data.shapefile.ShapefileDataStoreFactory;
+import org.geotools.data.simple.SimpleFeatureSource;
+import org.geotools.data.simple.SimpleFeatureStore;
 import org.geotools.feature.simple.SimpleFeatureTypeBuilder;
+import org.geotools.geojson.geom.GeometryJSON;
 import org.geotools.referencing.CRS;
 import org.geotools.referencing.crs.DefaultGeographicCRS;
 import org.geotools.referencing.factory.ReferencingObjectFactory;
@@ -30,11 +36,11 @@ import org.wololo.geojson.Feature;
 import org.wololo.geojson.FeatureCollection;
 import org.wololo.jts2geojson.GeoJSONWriter;
 
-import java.io.File;
-import java.io.IOException;
-import java.io.Serializable;
+import java.io.*;
 import java.nio.ByteBuffer;
 import java.nio.charset.Charset;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -139,6 +145,9 @@ public class GeometryReaderUtil {
 
   public static void saveAsShapefile(String filepath, List<Geometry> geometries, String crs)
       throws IOException, FactoryException {
+    System.out.println(
+            "*****************start writing shapefile ******************");
+    Long startTime = System.currentTimeMillis();
     File file = new File(filepath);
     Map<String, Serializable> params = new HashMap<String, Serializable>();
     params.put(ShapefileDataStoreFactory.URLP.key, file.toURI().toURL());
@@ -157,11 +166,6 @@ public class GeometryReaderUtil {
     tb.add("minLon", Double.class);
     tb.add("maxLat", Double.class);
     tb.add("maxLon", Double.class);
-
-    //tb.add("IDPoly1", Long.class);
-    //tb.add("IDPoly2", Long.class);
-
-
     ds.createSchema(tb.buildFeatureType());
     ds.setCharset(Charset.forName("GBK"));
 
@@ -178,15 +182,22 @@ public class GeometryReaderUtil {
       feature.setAttribute("minLon", env.getMinX());
       feature.setAttribute("maxLat", env.getMaxY());
       feature.setAttribute("maxLon", env.getMaxX());
+      writer.write();
     }
-
-    writer.write();
     writer.close();
     ds.dispose();
+
+    Long endTime = System.currentTimeMillis();
+    System.out.println(
+            "*****************stop writing shapefile ******************Took " + (endTime - startTime) / 1000 + "s");
   }
 
   public static void saveAsGeoJSON(String filepath, List<Geometry> geometries, String crs)
       throws IOException {
+
+    System.out.println(
+            "*****************start writing jsonfile ******************");
+    Long startTime = System.currentTimeMillis();
     GeoJSONWriter geoJSONWriter = new GeoJSONWriter();
     Feature[] features = new Feature[geometries.size()];
     int i = 0;
@@ -205,5 +216,80 @@ public class GeometryReaderUtil {
     String geojsonStr = featureCollection.toString();
     FileUtils.writeStringToFile(new File(filepath), geojsonStr);
 
+    Long endTime = System.currentTimeMillis();
+    System.out.println(
+            "*****************stop writing jsonfile ******************Took " + (endTime - startTime) / 1000 + "s");
+  }
+
+  public static String geojson2shp(String jsonFolder, String shpFolder, String crs){
+
+    System.out.println(
+            "*****************start convert geojsonfile to shapefile******************");
+    Long startTime = System.currentTimeMillis();
+
+    String shpPath = "";
+    GeometryJSON gjson = new GeometryJSON();
+    try{
+      //create shape file
+      File shpfolder = new File(shpFolder);
+      shpfolder.mkdir();
+      shpPath = shpfolder.getPath() + "/" + shpfolder.getName() + ".shp";
+      File file = new File(shpPath);
+
+      Map<String, Serializable> params = new HashMap<String, Serializable>();
+      params.put( ShapefileDataStoreFactory.URLP.key, file.toURI().toURL() );
+      ShapefileDataStore ds = (ShapefileDataStore) new ShapefileDataStoreFactory().createNewDataStore(params);
+
+      //define attribute
+      SimpleFeatureTypeBuilder tb = new SimpleFeatureTypeBuilder();
+      CoordinateReferenceSystem crsType = CRS.decode(crs);
+      tb.setCRS(crsType);
+
+      tb.setName("shapefile");
+      tb.add("the_geom", Polygon.class);
+      tb.add("POIID", Long.class);
+      ds.createSchema(tb.buildFeatureType());
+      //set code
+      Charset charset = Charset.forName("GBK");
+      ds.setCharset(charset);
+      //set writer
+      FeatureWriter<SimpleFeatureType, SimpleFeature> writer = ds.getFeatureWriter(ds.getTypeNames()[0], Transaction.AUTO_COMMIT);
+
+      File folder = new File(jsonFolder);
+      File[] listOfFiles = folder.listFiles();
+      int id = 0;
+      for (int j = 0; j < listOfFiles.length; j++) {
+        if (listOfFiles[j].isFile()) {
+          String filePath = listOfFiles[j].getPath();
+          System.out.println(filePath);
+          String strJson = new String(Files.readAllBytes(Paths.get(filePath)));
+          JSONObject json = new JSONObject(strJson);
+          JSONArray features = (JSONArray) json.get("features");
+          JSONObject feature0 = new JSONObject(features.get(0).toString());
+          for (int i = 0, len = features.length(); i < len; i++) {
+            String strFeature = features.get(i).toString();
+            Reader reader = new StringReader(strFeature);
+            SimpleFeature feature = writer.next();
+            feature.setAttribute("the_geom", gjson.readPolygon(reader));
+            feature.setAttribute("POIID", id);
+            id += 1;
+            writer.write();
+          }
+        }
+      }
+
+      System.out.println( id + " polygons");
+      writer.close();
+      ds.dispose();
+    }
+    catch(Exception e){
+      e.printStackTrace();
+    }
+
+    Long endTime = System.currentTimeMillis();
+    System.out.println(
+            "*****************stop converting geojsonfile to shapefile ******************Took " + (endTime - startTime) / 1000 + "s");
+
+    return shpPath;
   }
 }

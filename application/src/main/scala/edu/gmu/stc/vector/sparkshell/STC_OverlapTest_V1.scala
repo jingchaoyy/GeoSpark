@@ -4,8 +4,10 @@ import java.nio.file.{Files, Paths}
 
 import edu.gmu.stc.config.ConfigParameter
 import edu.gmu.stc.vector.examples.ShapeFileMetaTest._
+import edu.gmu.stc.vector.operation.FileConverter
 import edu.gmu.stc.vector.rdd.{GeometryRDD, ShapeFileMetaRDD}
 import edu.gmu.stc.vector.serde.VectorKryoRegistrator
+import edu.gmu.stc.vector.shapefile.reader.GeometryReaderUtil
 import edu.gmu.stc.vector.sparkshell.STC_BuildIndexTest.logError
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
@@ -13,6 +15,7 @@ import org.apache.spark.{SparkConf, SparkContext}
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.SparkSession
 import org.datasyslab.geospark.enums.{GridType, IndexType}
+
 import scala.reflect.io.{Directory, File}
 
 /**
@@ -179,13 +182,13 @@ object STC_OverlapTest_V1 extends Logging{
     val crs = args(6)
     var outputFilePath = ""
     if (outputFileFormat.equals("shp")) {
-      outputFilePath = folder.path + "/" + folderName + ".shp"
-      geometryRDD.saveAsShapefile(outputFilePath, crs)
+      val shpFolder = folder.path;
+      geometryRDD.save2GeoJson2Shapfile(shpFolder, crs);
     } else {
       outputFilePath = folder.path + "/" + folderName + ".geojson"
       geometryRDD.saveAsGeoJSON(outputFilePath)
     }
 
-    println("******** Number of intersected polygons: %d".format(geometryRDD.getGeometryRDD.count()))
+    //println("******** Number of intersected polygons: %d".format(geometryRDD.getGeometryRDD.count()))
   }
 }

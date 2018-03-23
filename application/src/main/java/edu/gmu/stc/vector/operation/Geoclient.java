@@ -65,8 +65,19 @@ public class Geoclient {
     }
 
     if(bPublished){
-      publishedUrl = this.restURL  + "/" + workspace_name +"/wms&service=WMS&version=1.1.0&request=GetMap&layers=" + workspace_name + ":" + datasetname +"&styles=&bbox=" + bbox + "&width=506&height=768&srs=" + proj + "&format=application/openlayers";
-     }else{
+      //publishedUrl = this.restURL  + "/" + workspace_name +"/wms&service=WMS&version=1.1.0&request=GetMap&layers=" + workspace_name + ":" + datasetname +"&styles=&bbox=" + bbox + "&width=506&height=768&srs=" + proj + "&format=application/openlayers";
+
+      //bbox=984018.1663741902,207673.09513056703,991906.4970533887,219622.53973435296
+      String[] strCord = bbox.split(",");
+      double lonOffset = (Double.parseDouble(strCord[2]) - Double.parseDouble(strCord[0]))/2;
+      double latOffset = (Double.parseDouble(strCord[3]) - Double.parseDouble(strCord[1]))/2;
+      double centerLon = Double.parseDouble(strCord[0]) + lonOffset;
+      double centerLat = Double.parseDouble(strCord[1]) + latOffset;
+      String center = Double.toString(centerLon) + "," +  Double.toString(centerLat);
+
+      publishedUrl = this.restURL  + "/" + workspace_name +"/wms|" + workspace_name + ":" + datasetname +"|" + bbox +"|" + center;
+
+    }else{
       publishedUrl = "Failed to publish map." + publishedUrl;
     }
     return publishedUrl;
