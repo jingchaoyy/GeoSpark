@@ -261,7 +261,11 @@ public class GeometryReaderUtil {
       for (int j = 0; j < listOfFiles.length; j++) {
         if (listOfFiles[j].isFile()) {
           String filePath = listOfFiles[j].getPath();
-          System.out.println(filePath);
+          //System.out.println(filePath);
+          String fileName = listOfFiles[j].getName();
+          if(fileName.startsWith("_") || fileName.startsWith(".")){
+            continue;
+          }
           String strJson = new String(Files.readAllBytes(Paths.get(filePath)));
           JSONObject json = new JSONObject(strJson);
           JSONArray features = (JSONArray) json.get("features");

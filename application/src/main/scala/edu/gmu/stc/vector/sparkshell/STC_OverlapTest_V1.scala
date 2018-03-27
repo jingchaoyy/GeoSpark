@@ -183,7 +183,7 @@ object STC_OverlapTest_V1 extends Logging{
     var outputFilePath = ""
     if (outputFileFormat.equals("shp")) {
       val shpFolder = folder.path;
-      geometryRDD.save2GeoJson2Shapfile(shpFolder, crs);
+      geometryRDD.save2HfdsGeoJson2Shapfile(shpFolder, crs);
     } else {
       outputFilePath = folder.path + "/" + folderName + ".geojson"
       geometryRDD.saveAsGeoJSON(outputFilePath)

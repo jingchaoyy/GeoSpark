@@ -2,12 +2,12 @@ package edu.gmu.stc.vector.rdd
 
 import com.vividsolutions.jts.geom.{Geometry, GeometryFactory}
 import com.vividsolutions.jts.index.SpatialIndex
-import edu.gmu.stc.vector.operation.FileConverter
+import edu.gmu.stc.vector.operation.{FileConverter, OperationUtil}
 import edu.gmu.stc.vector.rdd.index.IndexOperator
 import edu.gmu.stc.vector.shapefile.meta.ShapeFileMeta
 import edu.gmu.stc.vector.shapefile.reader.GeometryReaderUtil
 import org.apache.hadoop.conf.Configuration
-import org.apache.hadoop.fs.{FSDataInputStream, Path}
+import org.apache.hadoop.fs.{FSDataInputStream, FileSystem, Path}
 import org.apache.spark.internal.Logging
 import org.apache.spark.rdd.RDD
 import org.datasyslab.geospark.enums.IndexType
@@ -146,6 +146,37 @@ class GeometryRDD extends Logging{
     val jsonFilePath = jsonFolder.path + "/" + jsonFolder.name + ".geojson"
     GeometryReaderUtil.saveAsGeoJSON(jsonFilePath, polygons, crs)
     GeometryReaderUtil.geojson2shp(jsonFolder.path, shpFolder, crs)
+
+    //delete tmp files
+    jsonFolder.deleteRecursively()
+    val conf = new Configuration()
+    val localFs = FileSystem.getLocal(conf)
+    val jsonPath = new Path(shpFolder + "/" + "json/")
+    if (localFs.exists(jsonPath)) {
+      localFs.delete(jsonPath, true)
+    }
+  }
+
+  def save2HfdsGeoJson2Shapfile(shpFolder: String, crs: String): Unit = {
+
+    val hdfsLocation = "/user/root/tmpGeoJson/"
+    val localGeoJsonFolder = "/tmp/GeoJson/"
+    this.saveAsGeoJSON(hdfsLocation)
+    OperationUtil.hdfsToLocal(hdfsLocation, localGeoJsonFolder)
+    GeometryReaderUtil.geojson2shp(localGeoJsonFolder, shpFolder, crs)
+
+    //delete tmp files
+    val conf = new Configuration()
+    val fs = FileSystem.get(conf)
+    val localFs = FileSystem.getLocal(conf)
+    val hdfsPath = new Path(hdfsLocation)
+    val localJsonPath = new Path(localGeoJsonFolder)
+    if (fs.exists(hdfsPath)) {
+      fs.delete(hdfsPath, true)
+    }
+    if (localFs.exists(localJsonPath)) {
+      localFs.delete(localJsonPath, true)
+    }
   }
 
 }
