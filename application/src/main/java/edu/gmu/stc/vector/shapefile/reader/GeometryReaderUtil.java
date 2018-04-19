@@ -271,10 +271,14 @@ public class GeometryReaderUtil {
           JSONArray features = (JSONArray) json.get("features");
           JSONObject feature0 = new JSONObject(features.get(0).toString());
           for (int i = 0, len = features.length(); i < len; i++) {
-            String strFeature = features.get(i).toString();
+            JSONObject featureJSON =  features.getJSONObject(i);
+            String geometryType = featureJSON.getJSONObject("geometry").getString("type");
+            String strFeature = features.getString(i);
             Reader reader = new StringReader(strFeature);
+            Geometry geometry = gjson.read(reader);
             SimpleFeature feature = writer.next();
-            feature.setAttribute("the_geom", gjson.readPolygon(reader));
+            System.out.println(id);
+            feature.setAttribute("the_geom", geometry);
             feature.setAttribute("POIID", id);
             id += 1;
             writer.write();
@@ -296,4 +300,14 @@ public class GeometryReaderUtil {
 
     return shpPath;
   }
+
+  public static void main(String[] args) {
+    String localGeoJsonFolder = "/Users/feihu/Desktop/GeoJson";
+    String shpFolder = "/Users/feihu/Desktop/shp";
+    String crs = "epsg:4326";
+    GeometryReaderUtil.geojson2shp(localGeoJsonFolder, shpFolder, crs);
+
+  }
 }
+
+

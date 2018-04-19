@@ -2,21 +2,16 @@ package edu.gmu.stc.vector.sparkshell
 
 import java.nio.file.{Files, Paths}
 
+import com.vividsolutions.jts.geom.Polygon
 import edu.gmu.stc.config.ConfigParameter
-import edu.gmu.stc.vector.examples.ShapeFileMetaTest._
-import edu.gmu.stc.vector.operation.FileConverter
 import edu.gmu.stc.vector.rdd.{GeometryRDD, ShapeFileMetaRDD}
 import edu.gmu.stc.vector.serde.VectorKryoRegistrator
-import edu.gmu.stc.vector.shapefile.reader.GeometryReaderUtil
-import edu.gmu.stc.vector.sparkshell.STC_BuildIndexTest.logError
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
-import org.apache.spark.{SparkConf, SparkContext}
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.SparkSession
+import org.apache.spark.{SparkConf, SparkContext}
 import org.datasyslab.geospark.enums.{GridType, IndexType}
-
-import scala.reflect.io.{Directory, File}
 
 /**
   * Created by Fei Hu on 1/29/18.
@@ -38,23 +33,21 @@ object STC_OverlapTest_V1 extends Logging{
     }
 
     val outputFileDir = args(4)
-    var bexist = Files.exists(Paths.get(outputFileDir))
+    val bexist = Files.exists(Paths.get(outputFileDir))
     if(bexist){
       return "The output file directory already exists, please set a new one"
     }
 
-    sc.getConf
-      .set("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
-      .set("spark.kryo.registrator", classOf[VectorKryoRegistrator].getName)
+    sc.getConf.set("spark.serializer", "org.apache.spark.serializer.KryoSerializer").set("spark.kryo.registrator", classOf[VectorKryoRegistrator].getName)
 
-    val configFilePath = args(0)   //"/Users/feihu/Documents/GitHub/GeoSpark/config/conf.xml"
+    val configFilePath = args(0)
     val hConf = new Configuration()
     hConf.addResource(new Path(configFilePath))
     sc.hadoopConfiguration.addResource(hConf)
 
     val tableNames = hConf.get(ConfigParameter.SHAPEFILE_INDEX_TABLES).split(",").map(s => s.toLowerCase().trim)
 
-    val partitionNum = args(1).toInt  //24
+    val partitionNum = args(1).toInt
     val minX = -180
     val minY = -180
     val maxX = 180
@@ -113,7 +106,7 @@ object STC_OverlapTest_V1 extends Logging{
     }
 
     val outputFileDir = args(4)
-    var bexist = Files.exists(Paths.get(outputFileDir))
+    val bexist = Files.exists(Paths.get(outputFileDir))
     if(bexist){
       return "The output file directory already exists, please set a new one"
     }
@@ -167,6 +160,9 @@ object STC_OverlapTest_V1 extends Logging{
     geometryRDD.intersect(shapeFileMetaRDD1, shapeFileMetaRDD2, partitionNum)
     geometryRDD.cache()
 
+    val polygonRDD = geometryRDD.filterByGeometryType(classOf[Polygon])
+    polygonRDD.cache()
+
     /*val filePath = args(4)
     val crs = args(5)
     if (filePath.endsWith("shp")) {
@@ -183,10 +179,10 @@ object STC_OverlapTest_V1 extends Logging{
     var outputFilePath = ""
     if (outputFileFormat.equals("shp")) {
       val shpFolder = folder.path;
-      geometryRDD.save2HfdsGeoJson2Shapfile(shpFolder, crs);
+      polygonRDD.save2HfdsGeoJson2Shapfile(shpFolder, crs);
     } else {
       outputFilePath = folder.path + "/" + folderName + ".geojson"
-      geometryRDD.saveAsGeoJSON(outputFilePath)
+      polygonRDD.saveAsGeoJSON(outputFilePath)
     }
 
     //println("******** Number of intersected polygons: %d".format(geometryRDD.getGeometryRDD.count()))
