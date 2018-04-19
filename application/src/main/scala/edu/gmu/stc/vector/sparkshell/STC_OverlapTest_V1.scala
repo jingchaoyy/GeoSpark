@@ -73,6 +73,9 @@ object STC_OverlapTest_V1 extends Logging{
     geometryRDD.intersect(shapeFileMetaRDD1, shapeFileMetaRDD2, partitionNum)
     geometryRDD.cache()
 
+    val polygonRDD = geometryRDD.filterByGeometryType(classOf[Polygon])
+    polygonRDD.cache()
+
     val path: scala.reflect.io.Path = scala.reflect.io.Path (outputFileDir)
     val folder = path.createDirectory(failIfExists=false)
     val folderName = folder.name
@@ -80,8 +83,8 @@ object STC_OverlapTest_V1 extends Logging{
     val crs = args(6)
     var outputFilePath = ""
     if (outputFileFormat.equals("shp")) {
-      outputFilePath = folder.path + "/" + folderName + ".shp"
-      geometryRDD.saveAsShapefile(outputFilePath, crs)
+      outputFilePath = folder.path
+      polygonRDD.save2HfdsGeoJson2Shapfile(outputFilePath, crs)
     } else {
       outputFilePath = folder.path + "/" + folderName + ".geojson"
       geometryRDD.saveAsGeoJSON(outputFilePath)
@@ -111,9 +114,10 @@ object STC_OverlapTest_V1 extends Logging{
       return "The output file directory already exists, please set a new one"
     }
 
-    val sparkConf = new SparkConf().setAppName("%s_%s_%s_%s".format("STC_OverlapTest_v1", args(1), args(2), args(3)))
-      .set("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
-      .set("spark.kryo.registrator", classOf[VectorKryoRegistrator].getName)
+    val sparkConf = new SparkConf()
+    sparkConf.setAppName("%s_%s_%s_%s".format("STC_OverlapTest_v1", args(1), args(2), args(3)))
+    sparkConf.set("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
+    sparkConf.set("spark.kryo.registrator", classOf[VectorKryoRegistrator].getName)
 
     if (System.getProperty("os.name").equals("Mac OS X")) {
       sparkConf.setMaster("local[6]")
@@ -163,14 +167,6 @@ object STC_OverlapTest_V1 extends Logging{
     val polygonRDD = geometryRDD.filterByGeometryType(classOf[Polygon])
     polygonRDD.cache()
 
-    /*val filePath = args(4)
-    val crs = args(5)
-    if (filePath.endsWith("shp")) {
-      geometryRDD.saveAsShapefile(filePath, crs)
-    } else {
-      geometryRDD.saveAsGeoJSON(filePath)
-    }*/
-
     val path: scala.reflect.io.Path = scala.reflect.io.Path (outputFileDir)
     val folder = path.createDirectory(failIfExists=false)
     val folderName = folder.name
@@ -178,8 +174,8 @@ object STC_OverlapTest_V1 extends Logging{
     val crs = args(6)
     var outputFilePath = ""
     if (outputFileFormat.equals("shp")) {
-      val shpFolder = folder.path;
-      polygonRDD.save2HfdsGeoJson2Shapfile(shpFolder, crs);
+      val shpFolder = folder.path
+      polygonRDD.save2HfdsGeoJson2Shapfile(shpFolder, crs)
     } else {
       outputFilePath = folder.path + "/" + folderName + ".geojson"
       polygonRDD.saveAsGeoJSON(outputFilePath)

@@ -261,7 +261,6 @@ public class GeometryReaderUtil {
       for (int j = 0; j < listOfFiles.length; j++) {
         if (listOfFiles[j].isFile()) {
           String filePath = listOfFiles[j].getPath();
-          //System.out.println(filePath);
           String fileName = listOfFiles[j].getName();
           if(fileName.startsWith("_") || fileName.startsWith(".")){
             continue;
@@ -269,15 +268,11 @@ public class GeometryReaderUtil {
           String strJson = new String(Files.readAllBytes(Paths.get(filePath)));
           JSONObject json = new JSONObject(strJson);
           JSONArray features = (JSONArray) json.get("features");
-          JSONObject feature0 = new JSONObject(features.get(0).toString());
           for (int i = 0, len = features.length(); i < len; i++) {
-            JSONObject featureJSON =  features.getJSONObject(i);
-            String geometryType = featureJSON.getJSONObject("geometry").getString("type");
             String strFeature = features.getString(i);
             Reader reader = new StringReader(strFeature);
             Geometry geometry = gjson.read(reader);
             SimpleFeature feature = writer.next();
-            System.out.println(id);
             feature.setAttribute("the_geom", geometry);
             feature.setAttribute("POIID", id);
             id += 1;
