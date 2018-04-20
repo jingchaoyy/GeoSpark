@@ -2,21 +2,16 @@ package edu.gmu.stc.vector.sparkshell
 
 import java.nio.file.{Files, Paths}
 
+import com.vividsolutions.jts.geom.Polygon
 import edu.gmu.stc.config.ConfigParameter
-import edu.gmu.stc.vector.examples.ShapeFileMetaTest._
-import edu.gmu.stc.vector.operation.FileConverter
 import edu.gmu.stc.vector.rdd.{GeometryRDD, ShapeFileMetaRDD}
 import edu.gmu.stc.vector.serde.VectorKryoRegistrator
-import edu.gmu.stc.vector.shapefile.reader.GeometryReaderUtil
-import edu.gmu.stc.vector.sparkshell.STC_BuildIndexTest.logError
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
-import org.apache.spark.{SparkConf, SparkContext}
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.SparkSession
+import org.apache.spark.{SparkConf, SparkContext}
 import org.datasyslab.geospark.enums.{GridType, IndexType}
-
-import scala.reflect.io.{Directory, File}
 
 /**
   * Created by Fei Hu on 1/29/18.
@@ -38,23 +33,21 @@ object STC_OverlapTest_V1 extends Logging{
     }
 
     val outputFileDir = args(4)
-    var bexist = Files.exists(Paths.get(outputFileDir))
+    val bexist = Files.exists(Paths.get(outputFileDir))
     if(bexist){
       return "The output file directory already exists, please set a new one"
     }
 
-    sc.getConf
-      .set("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
-      .set("spark.kryo.registrator", classOf[VectorKryoRegistrator].getName)
+    sc.getConf.set("spark.serializer", "org.apache.spark.serializer.KryoSerializer").set("spark.kryo.registrator", classOf[VectorKryoRegistrator].getName)
 
-    val configFilePath = args(0)   //"/Users/feihu/Documents/GitHub/GeoSpark/config/conf.xml"
+    val configFilePath = args(0)
     val hConf = new Configuration()
     hConf.addResource(new Path(configFilePath))
     sc.hadoopConfiguration.addResource(hConf)
 
     val tableNames = hConf.get(ConfigParameter.SHAPEFILE_INDEX_TABLES).split(",").map(s => s.toLowerCase().trim)
 
-    val partitionNum = args(1).toInt  //24
+    val partitionNum = args(1).toInt
     val minX = -180
     val minY = -180
     val maxX = 180
@@ -80,6 +73,9 @@ object STC_OverlapTest_V1 extends Logging{
     geometryRDD.intersect(shapeFileMetaRDD1, shapeFileMetaRDD2, partitionNum)
     geometryRDD.cache()
 
+    val polygonRDD = geometryRDD.filterByGeometryType(classOf[Polygon])
+    polygonRDD.cache()
+
     val path: scala.reflect.io.Path = scala.reflect.io.Path (outputFileDir)
     val folder = path.createDirectory(failIfExists=false)
     val folderName = folder.name
@@ -87,8 +83,8 @@ object STC_OverlapTest_V1 extends Logging{
     val crs = args(6)
     var outputFilePath = ""
     if (outputFileFormat.equals("shp")) {
-      outputFilePath = folder.path + "/" + folderName + ".shp"
-      geometryRDD.saveAsShapefile(outputFilePath, crs)
+      outputFilePath = folder.path
+      polygonRDD.save2HfdsGeoJson2Shapfile(outputFilePath, crs)
     } else {
       outputFilePath = folder.path + "/" + folderName + ".geojson"
       geometryRDD.saveAsGeoJSON(outputFilePath)
@@ -113,14 +109,15 @@ object STC_OverlapTest_V1 extends Logging{
     }
 
     val outputFileDir = args(4)
-    var bexist = Files.exists(Paths.get(outputFileDir))
+    val bexist = Files.exists(Paths.get(outputFileDir))
     if(bexist){
       return "The output file directory already exists, please set a new one"
     }
 
-    val sparkConf = new SparkConf().setAppName("%s_%s_%s_%s".format("STC_OverlapTest_v1", args(1), args(2), args(3)))
-      .set("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
-      .set("spark.kryo.registrator", classOf[VectorKryoRegistrator].getName)
+    val sparkConf = new SparkConf()
+    sparkConf.setAppName("%s_%s_%s_%s".format("STC_OverlapTest_v1", args(1), args(2), args(3)))
+    sparkConf.set("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
+    sparkConf.set("spark.kryo.registrator", classOf[VectorKryoRegistrator].getName)
 
     if (System.getProperty("os.name").equals("Mac OS X")) {
       sparkConf.setMaster("local[6]")
@@ -167,13 +164,8 @@ object STC_OverlapTest_V1 extends Logging{
     geometryRDD.intersect(shapeFileMetaRDD1, shapeFileMetaRDD2, partitionNum)
     geometryRDD.cache()
 
-    /*val filePath = args(4)
-    val crs = args(5)
-    if (filePath.endsWith("shp")) {
-      geometryRDD.saveAsShapefile(filePath, crs)
-    } else {
-      geometryRDD.saveAsGeoJSON(filePath)
-    }*/
+    val polygonRDD = geometryRDD.filterByGeometryType(classOf[Polygon])
+    polygonRDD.cache()
 
     val path: scala.reflect.io.Path = scala.reflect.io.Path (outputFileDir)
     val folder = path.createDirectory(failIfExists=false)
@@ -182,11 +174,11 @@ object STC_OverlapTest_V1 extends Logging{
     val crs = args(6)
     var outputFilePath = ""
     if (outputFileFormat.equals("shp")) {
-      val shpFolder = folder.path;
-      geometryRDD.save2HfdsGeoJson2Shapfile(shpFolder, crs);
+      val shpFolder = folder.path
+      polygonRDD.save2HfdsGeoJson2Shapfile(shpFolder, crs)
     } else {
       outputFilePath = folder.path + "/" + folderName + ".geojson"
-      geometryRDD.saveAsGeoJSON(outputFilePath)
+      polygonRDD.saveAsGeoJSON(outputFilePath)
     }
 
     //println("******** Number of intersected polygons: %d".format(geometryRDD.getGeometryRDD.count()))

@@ -1,6 +1,6 @@
 package edu.gmu.stc.vector.rdd
 
-import com.vividsolutions.jts.geom.{Geometry, GeometryFactory}
+import com.vividsolutions.jts.geom.{Geometry, GeometryFactory, Polygon}
 import com.vividsolutions.jts.index.SpatialIndex
 import edu.gmu.stc.vector.operation.{FileConverter, OperationUtil}
 import edu.gmu.stc.vector.rdd.index.IndexOperator
@@ -65,6 +65,10 @@ class GeometryRDD extends Logging{
   }
 
   def getGeometryRDD: RDD[Geometry] = this.geometryRDD
+
+  def setGeometryRDD(rdd: RDD[Geometry]): Unit = {
+    this.geometryRDD = rdd
+  }
 
   def cache(): Unit = {
     this.geometryRDD = this.geometryRDD.cache()
@@ -179,4 +183,23 @@ class GeometryRDD extends Logging{
     }
   }
 
+  def filterByGeometryType(geometryType: Class[_]): GeometryRDD = {
+    val rdd = this.geometryRDD.filter(geometry => {
+      geometry.getClass == geometryType
+    })
+
+    val geometryRDD = new GeometryRDD
+    geometryRDD.setGeometryRDD(rdd)
+    geometryRDD
+  }
+
+  def filterByGeometryType(geometryType: Class[_], inputGeometryRDD: GeometryRDD): GeometryRDD = {
+    val rdd = inputGeometryRDD.getGeometryRDD.filter(geometry => {
+      geometry.getClass == geometryType
+    })
+
+    val geometryRDD = new GeometryRDD
+    geometryRDD.setGeometryRDD(rdd)
+    geometryRDD
+  }
 }
