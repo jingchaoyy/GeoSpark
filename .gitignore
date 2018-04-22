@@ -8,6 +8,8 @@
 /bin/
 /doc/
 /config/
+/data/
+/GeoSpark_Result/
 /log/
 *.json
 *.geojson

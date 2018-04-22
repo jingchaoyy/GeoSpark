@@ -163,8 +163,10 @@ class GeometryRDD extends Logging{
 
   def save2HfdsGeoJson2Shapfile(shpFolder: String, crs: String): Unit = {
 
-    val hdfsLocation = "/user/root/tmpGeoJson/"
-    val localGeoJsonFolder = "/tmp/GeoJson/"
+//    val hdfsLocation = "/user/root/tmpGeoJson/"
+//    val localGeoJsonFolder = "/tmp/GeoJson/"
+    val hdfsLocation = "/Users/YJccccc/GeoSpark/GeoSpark_Result/tmpSHP/hdfs"
+    val localGeoJsonFolder = "/Users/YJccccc/GeoSpark/GeoSpark_Result/tmpSHP/local"
     this.saveAsGeoJSON(hdfsLocation)
     OperationUtil.hdfsToLocal(hdfsLocation, localGeoJsonFolder)
     GeometryReaderUtil.geojson2shp(localGeoJsonFolder, shpFolder, crs)
