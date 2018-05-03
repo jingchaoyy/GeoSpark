@@ -10,7 +10,7 @@ import org.apache.spark.serializer.KryoSerializer
 import org.datasyslab.geospark.spatialRDD.{CircleRDD, SpatialRDD}
 import org.datasyslab.geospark.formatMapper.shapefileParser.ShapefileReader
 import org.apache.spark.sql.SparkSession
-import org.datasyslab.geospark.enums.GridType
+import org.datasyslab.geospark.enums.{GridType, IndexType}
 import org.datasyslab.geospark.serde.GeoSparkKryoRegistrator
 import org.datasyslab.geospark.spatialOperator.JoinQuery
 
@@ -26,6 +26,7 @@ object GeoSpark_JoinTest_V1 {
     // Enable GeoSpark custom Kryo serializer
     conf.set("spark.serializer", classOf[KryoSerializer].getName)
     conf.set("spark.kryo.registrator", classOf[GeoSparkKryoRegistrator].getName)
+    conf.set("spark.kryoserializer.buffer.max.mb", "512")  //Avoiding memory overflow
 //    val sc = new SparkContext(conf)
 
     if (System.getProperty("os.name").equals("Mac OS X")) {
@@ -56,20 +57,29 @@ object GeoSpark_JoinTest_V1 {
     val sourceCrsCode = "epsg:4326" // WGS84, the most common degree-based CRS
     val targetCrsCode = "epsg:3857" // The most common meter-based CRS
     //  objectRDD.CRSTransform(sourceCrsCode, targetCrsCode)
-    //spatialRDD1.CRSTransform(sourceCrsCode, targetCrsCode)
-    //spatialRDD2.CRSTransform(sourceCrsCode, targetCrsCode)
+    spatialRDD1.CRSTransform(sourceCrsCode, targetCrsCode)
+    spatialRDD2.CRSTransform(sourceCrsCode, targetCrsCode)
 
     // Read other attributes in an SpatialRDD
     val rddWithOtherAttributes1 = spatialRDD1.rawSpatialRDD.rdd.map[String](f => f.getUserData.asInstanceOf[String])
     val rddWithOtherAttributes2 = spatialRDD2.rawSpatialRDD.rdd.map[String](f => f.getUserData.asInstanceOf[String])
 
-    val considerBoundaryIntersection = false // Only return gemeotries fully covered by each query window in queryWindowRDD
-    val usingIndex = false
+    val considerBoundaryIntersection = true // Only return gemeotries fully covered by each query window in queryWindowRDD if set to false
+//    val usingIndex = false
 
     spatialRDD1.analyze()
 
     spatialRDD1.spatialPartitioning(GridType.KDBTREE)
+    print("############", spatialRDD1.countWithoutDuplicates())
     spatialRDD2.spatialPartitioning(spatialRDD1.getPartitioner)
+    print("############", spatialRDD2.countWithoutDuplicates())
+
+    // Use spatial indexes
+    // The index should be built on either one of two SpatialRDDs. In general, you should build it on the larger SpatialRDD
+    val buildOnSpatialPartitionedRDD = true // Set to TRUE only if run join query
+    val usingIndex = true
+    spatialRDD2.buildIndex(IndexType.QUADTREE, buildOnSpatialPartitionedRDD)
+    print("################# Index build success")
 
     val result = JoinQuery.SpatialJoinQuery(spatialRDD1, spatialRDD2, usingIndex, considerBoundaryIntersection)
     print("******************** ", result.count())
