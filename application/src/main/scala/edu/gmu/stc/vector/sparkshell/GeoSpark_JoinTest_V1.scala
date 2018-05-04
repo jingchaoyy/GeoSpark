@@ -48,6 +48,7 @@ object GeoSpark_JoinTest_V1 {
 
     var spatialRDD1 = new SpatialRDD[Geometry]
     spatialRDD1.rawSpatialRDD = ShapefileReader.readToGeometryRDD(sparkSession.sparkContext, shapefileInputLocation1)
+
     print("********* ", spatialRDD1.countWithoutDuplicates())
     var spatialRDD2 = new SpatialRDD[Geometry]
     spatialRDD2.rawSpatialRDD = ShapefileReader.readToGeometryRDD(sparkSession.sparkContext, shapefileInputLocation2)
@@ -69,19 +70,25 @@ object GeoSpark_JoinTest_V1 {
 
     spatialRDD1.analyze()
 
-    spatialRDD1.spatialPartitioning(GridType.KDBTREE)
+    spatialRDD1.spatialPartitioning(GridType.KDBTREE, 30)
     print("############", spatialRDD1.countWithoutDuplicates())
     spatialRDD2.spatialPartitioning(spatialRDD1.getPartitioner)
     print("############", spatialRDD2.countWithoutDuplicates())
 
     // Use spatial indexes
-    // The index should be built on either one of two SpatialRDDs. In general, you should build it on the larger SpatialRDD
+    // The index should be built on either one of two SpatialRDDs.
+    // In general, you should build it on the larger SpatialRDD
     val buildOnSpatialPartitionedRDD = true // Set to TRUE only if run join query
     val usingIndex = true
     spatialRDD2.buildIndex(IndexType.QUADTREE, buildOnSpatialPartitionedRDD)
     print("################# Index build success")
 
-    val result = JoinQuery.SpatialJoinQuery(spatialRDD1, spatialRDD2, usingIndex, considerBoundaryIntersection)
+    val result = JoinQuery.SpatialJoinQuery(
+      spatialRDD1, spatialRDD2,
+      usingIndex,
+      considerBoundaryIntersection)
+
+
     print("******************** ", result.count())
     sparkSession.stop()
   }
