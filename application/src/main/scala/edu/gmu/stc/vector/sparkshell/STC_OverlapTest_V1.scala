@@ -32,6 +32,8 @@ object STC_OverlapTest_V1 extends Logging{
       return "Please input the right arguments"
     }
 
+    System.currentTimeMillis()
+
     val outputFileDir = args(4)
     val bexist = Files.exists(Paths.get(outputFileDir))
     if(bexist){
@@ -82,7 +84,7 @@ object STC_OverlapTest_V1 extends Logging{
     val outputFileFormat = args(5)
     val crs = args(6)
     var outputFilePath = ""
-    if (outputFileFormat.equals("shp")) {
+    if (outputFileFormat.equalsIgnoreCase("shp")) {
       outputFilePath = folder.path
       polygonRDD.save2HfdsGeoJson2Shapfile(outputFilePath, crs)
     } else {

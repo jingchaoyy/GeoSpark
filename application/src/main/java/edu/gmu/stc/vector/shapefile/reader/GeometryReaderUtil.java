@@ -78,7 +78,7 @@ public class GeometryReaderUtil {
     PrimitiveShape value = new PrimitiveShape(shpRecord);
 
     byte[] primitiveBytes = new byte[shapeFileMeta.getDbf_length()];
-    dbfDataInputStream.read(shapeFileMeta.getShp_offset(),
+    dbfDataInputStream.read(shapeFileMeta.getDbf_offset(),
                             primitiveBytes,
                             0,
                             shapeFileMeta.getDbf_length());
