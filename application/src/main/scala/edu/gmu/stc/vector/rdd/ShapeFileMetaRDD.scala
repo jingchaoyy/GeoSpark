@@ -15,6 +15,7 @@ import org.apache.spark.rdd.NewHadoopRDD
 import org.apache.hadoop.mapreduce.InputFormat
 import org.apache.log4j.Logger
 import org.apache.spark.internal.Logging
+import org.apache.spark.sql.SQLContext
 import org.datasyslab.geospark.enums.{GridType, IndexType}
 import org.datasyslab.geospark.formatMapper.shapefileParser.shapes.ShapeKey
 import org.datasyslab.geospark.spatialPartitioning.SpatialPartitioner
@@ -200,7 +201,12 @@ class ShapeFileMetaRDD (sc: SparkContext, @transient conf: Configuration) extend
       hibernateUtil.closeSession()
       hibernateUtil.closeSessionFactory()
     })
+  }
 
+  def saveShapeFileMetaToParquet(sc: SparkContext): Unit = {
+    val sqlContext = new SQLContext(sc)
+    import sqlContext.implicits._
+    shapeFileMetaRDD.toJavaRDD()
   }
 
   def partition(partitioner: SpatialPartitioner): Unit = {
