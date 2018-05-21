@@ -16,7 +16,7 @@ import org.datasyslab.geospark.enums.{GridType, IndexType}
 object STC_OverlapTest_v3 extends Logging{
   def main(args: Array[String]): Unit = {
 
-    if (args.length != 5) {
+    if (args.length != 6) {
       logError("You input "+ args.length + "arguments: " + args.mkString(" ") + ", but it requires 5 arguments: " +
         "\n \t 1)configFilePath: this file path for the configuration file path" +
         "\n \t 2) numPartition: the number of partitions" +
@@ -30,7 +30,8 @@ object STC_OverlapTest_v3 extends Logging{
 
     val t = System.currentTimeMillis()
 
-    val sparkConf = new SparkConf().setAppName("%s_%s_%s_%s".format("STC_OverlapTest_v2", args(1), args(2), args(3)))
+    val sparkConf = new SparkConf()
+      .setAppName("%s_%s_%s_%s".format("STC_OverlapTest_v2", args(1), args(2), args(3)))
       .set("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
       .set("spark.kryo.registrator", classOf[VectorKryoRegistrator].getName)
 
@@ -60,7 +61,7 @@ object STC_OverlapTest_v3 extends Logging{
     val table1 = tableNames(0)
     shapeFileMetaRDD1.initializeShapeFileMetaRDDAndPartitioner(sc, table1, gridType, partitionNum, minX, minY, maxX, maxY)
     val geometryRDD1 = new GeometryRDD
-    geometryRDD1.initialize(shapeFileMetaRDD1, hasAttribute = false)
+    geometryRDD1.initialize(shapeFileMetaRDD1, hasAttribute = true)
     geometryRDD1.partition(shapeFileMetaRDD1.getPartitioner)
     geometryRDD1.indexPartition(indexType)
     geometryRDD1.cache()
@@ -84,7 +85,7 @@ object STC_OverlapTest_v3 extends Logging{
       partitionNum, minX, minY, maxX, maxY)
 
     val geometryRDD2 = new GeometryRDD
-    geometryRDD2.initialize(shapeFileMetaRDD2, hasAttribute = false)
+    geometryRDD2.initialize(shapeFileMetaRDD2, hasAttribute = true)
     geometryRDD2.partition(shapeFileMetaRDD1.getPartitioner)
     geometryRDD2.cache()
 
