@@ -114,15 +114,10 @@ object STC_OverlapTest_v3 extends Logging{
     val endTime = System.currentTimeMillis()
     println("******** Intersection time: " + (endTime - startTime)/1000000)
 
-
     val filePath = args(4)
-    val path: scala.reflect.io.Path = scala.reflect.io.Path (filePath)
-    val folder = path.createDirectory(failIfExists=false)
-
     val crs = args(5)
     if (filePath.endsWith("shp")) {
-      val shpFolder = folder.path
-      geometryRDD.save2HfdsGeoJson2Shapfile(shpFolder, crs)
+      geometryRDD.saveAsShapefile(filePath, crs)
     } else {
       geometryRDD.saveAsGeoJSON(filePath)
     }
