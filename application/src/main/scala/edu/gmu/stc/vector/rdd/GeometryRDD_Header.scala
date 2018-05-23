@@ -1,0 +1,210 @@
+package edu.gmu.stc.vector.rdd
+
+import com.vividsolutions.jts.geom.Geometry
+import com.vividsolutions.jts.index.SpatialIndex
+import edu.gmu.stc.vector.operation.OperationUtil
+import edu.gmu.stc.vector.rdd.index.IndexOperator
+import edu.gmu.stc.vector.shapefile.meta.ShapeFileMeta
+import edu.gmu.stc.vector.shapefile.reader.GeometryReaderUtil_Header
+import org.apache.hadoop.conf.Configuration
+import org.apache.hadoop.fs.{FileSystem, Path}
+import org.apache.spark.internal.Logging
+import org.apache.spark.rdd.RDD
+import org.datasyslab.geospark.enums.IndexType
+import org.datasyslab.geospark.spatialPartitioning.SpatialPartitioner
+import org.wololo.geojson.{Feature, FeatureCollection}
+import org.wololo.jts2geojson.GeoJSONWriter
+
+import scala.collection.JavaConverters._
+
+/**
+  * Created by Jingchao Yang on 5/22/18.
+  */
+class GeometryRDD_Header extends Logging{
+  private var geometryRDD: RDD[Geometry] = _
+  private var indexedGeometryRDD: RDD[SpatialIndex] = _
+  private var partitioner: SpatialPartitioner = _
+
+  def initialize(shapeFileMetaRDD: ShapeFileMetaRDD, hasAttribute: Boolean = false): Unit = {
+    this.geometryRDD = shapeFileMetaRDD.getShapeFileMetaRDD.mapPartitions(itor => {
+      val shapeFileMetaList = itor.toList
+      if (hasAttribute) {
+        GeometryReaderUtil_Header.readGeometriesWithAttributes(shapeFileMetaList.asJava).asScala.toIterator
+      } else {
+        GeometryReaderUtil_Header.readGeometries(shapeFileMetaList.asJava).asScala.toIterator
+      }
+    })
+
+    this.partitioner = shapeFileMetaRDD.getPartitioner
+  }
+
+  def partition(partition: SpatialPartitioner): Unit = {
+    this.partitioner = partition
+    this.geometryRDD = this.geometryRDD.flatMap(geometry => partition.placeObject(geometry).asScala)
+      .partitionBy(partition).map(_._2)
+  }
+
+  def intersect(shapeFileMetaRDD1: ShapeFileMetaRDD, shapeFileMetaRDD2: ShapeFileMetaRDD, partitionNum: Int): Unit = {
+    var joinRDD: RDD[(ShapeFileMeta, ShapeFileMeta)] = shapeFileMetaRDD1.spatialJoin(shapeFileMetaRDD2, partitionNum)
+      .sortBy({case (shapeFileMeta1, shapeFileMeta2) => shapeFileMeta1.getShp_offset})
+      .repartition(partitionNum)
+
+    joinRDD = joinRDD.cache()
+
+    //logInfo("************** Number of elements in JoinedRDD: %d".format(joinRDD.count()))
+
+    val t1 = System.currentTimeMillis()
+
+    this.geometryRDD = joinRDD.mapPartitions(IndexOperator.spatialIntersect)
+    //this.geometryRDD = this.geometryRDD.repartition(5)
+
+    val t2 = System.currentTimeMillis()
+
+    //logInfo("******** Intersection takes: %d".format((t2 - t1)/1000))
+  }
+
+  def getGeometryRDD: RDD[Geometry] = this.geometryRDD
+
+  def setGeometryRDD(rdd: RDD[Geometry]): Unit = {
+    this.geometryRDD = rdd
+  }
+
+  def cache(): Unit = {
+    this.geometryRDD = this.geometryRDD.cache()
+  }
+
+  def uncache(blocking: Boolean = true): Unit = {
+    this.geometryRDD.unpersist(blocking)
+  }
+
+  def indexPartition(indexType: IndexType) = {
+    val indexBuilder = new IndexOperator(indexType.toString)
+    this.indexedGeometryRDD = this.geometryRDD.mapPartitions(indexBuilder.buildIndex)
+  }
+
+  def intersect(other: GeometryRDD_Header): GeometryRDD_Header = {
+    val geometryRDD = new GeometryRDD_Header
+    geometryRDD.geometryRDD = this.indexedGeometryRDD.zipPartitions(other.geometryRDD)(IndexOperator.geoSpatialIntersection)
+    geometryRDD.geometryRDD = geometryRDD.geometryRDD.filter(geometry => !geometry.isEmpty)
+    geometryRDD
+  }
+
+  def intersectV2(other: GeometryRDD_Header, partitionNum: Int): GeometryRDD_Header = {
+    val geometryRDD = new GeometryRDD_Header
+    val pairedRDD= this.indexedGeometryRDD.zipPartitions(other.geometryRDD)(IndexOperator.geoSpatialJoin)
+
+    geometryRDD.geometryRDD = pairedRDD
+      .map({case (g1, g2) => {
+        (g1.hashCode() + "_" + g2.hashCode(), (g1, g2))
+      }})
+      .reduceByKey((v1, v2) => v1)
+        .map(tuple => tuple._2)
+      .repartition(partitionNum)
+      .map({case(g1, g2) => {
+        //g1.intersection(g2)
+        val polygon = g1.intersection(g2)
+        polygon.setUserData(g1.getUserData + "\t" + g2.getUserData)
+        polygon
+      }})
+      .filter(g => !g.isEmpty)
+      .map(g => (g.hashCode(), g))
+      .reduceByKey({
+        case (g1, g2) => g1
+      })
+      .map(_._2)
+
+    geometryRDD
+  }
+
+  def saveAsGeoJSON(outputLocation: String): Unit = {
+    this.geometryRDD.mapPartitions(iterator => {
+      val geoJSONWriter = new GeoJSONWriter
+      val featureList = iterator.map(geometry => {
+        if (geometry.getUserData != null) {
+          val userData = Map("UserData" -> geometry.getUserData)
+          new Feature(geoJSONWriter.write(geometry), userData.asJava)
+        } else {
+          new Feature(geoJSONWriter.write(geometry), null)
+        }
+      }).toList
+
+      val featureCollection = new FeatureCollection(featureList.toArray[Feature])
+      List[String](featureCollection.toString).toIterator
+    }).saveAsTextFile(outputLocation)
+  }
+
+  def saveAsShapefile(filepath: String, crs: String, header: String): Unit = {
+    val t = System.currentTimeMillis()
+    val polygons = this.geometryRDD.collect().toList.asJava
+    println("************** collect overlap polygon size: " +polygons.size)
+    println("************** collect overlap polygon time: " + (System.currentTimeMillis() - t)/1000000)
+
+    GeometryReaderUtil_Header.saveAsShapefile(filepath, polygons, crs, header)
+  }
+
+  def save2GeoJson2Shapfile(shpFolder: String, crs: String): Unit = {
+    val t = System.currentTimeMillis()
+    val polygons = this.geometryRDD.collect().toList.asJava
+    println("************** collect overlap polygon size: " +polygons.size)
+    println("************** collect overlap polygon time: " + (System.currentTimeMillis() - t)/1000000)
+
+    val jsonpath: scala.reflect.io.Path = scala.reflect.io.Path (shpFolder + "/" + "json/")
+    val jsonFolder = jsonpath.createDirectory(failIfExists=false)
+    val jsonFilePath = jsonFolder.path + "/" + jsonFolder.name + ".geojson"
+    GeometryReaderUtil_Header.saveAsGeoJSON(jsonFilePath, polygons, crs)
+    GeometryReaderUtil_Header.geojson2shp(jsonFolder.path, shpFolder, crs)
+
+    //delete tmp files
+    jsonFolder.deleteRecursively()
+    val conf = new Configuration()
+    val localFs = FileSystem.getLocal(conf)
+    val jsonPath = new Path(shpFolder + "/" + "json/")
+    if (localFs.exists(jsonPath)) {
+      localFs.delete(jsonPath, true)
+    }
+  }
+
+  def save2HfdsGeoJson2Shapfile(shpFolder: String, crs: String): Unit = {
+
+//    val hdfsLocation = "/user/root/tmpGeoJson/"
+//    val localGeoJsonFolder = "/tmp/GeoJson/"
+    val hdfsLocation = "/Users/YJccccc/GeoSpark/GeoSpark_Result/tmpSHP_header/hdfs"
+    val localGeoJsonFolder = "/Users/YJccccc/GeoSpark/GeoSpark_Result/tmpSHP_header/local"
+    this.saveAsGeoJSON(hdfsLocation)
+    OperationUtil.hdfsToLocal(hdfsLocation, localGeoJsonFolder)
+    GeometryReaderUtil_Header.geojson2shp(localGeoJsonFolder, shpFolder, crs)
+
+    //delete tmp files
+    val conf = new Configuration()
+    val fs = FileSystem.get(conf)
+    val localFs = FileSystem.getLocal(conf)
+    val hdfsPath = new Path(hdfsLocation)
+    val localJsonPath = new Path(localGeoJsonFolder)
+    if (fs.exists(hdfsPath)) {
+      fs.delete(hdfsPath, true)
+    }
+    if (localFs.exists(localJsonPath)) {
+      localFs.delete(localJsonPath, true)
+    }
+  }
+
+  def filterByGeometryType(geometryType: Class[_]): GeometryRDD_Header = {
+    val rdd = this.geometryRDD.filter(geometry => {
+      geometry.getClass == geometryType
+    })
+
+    val geometryRDD = new GeometryRDD_Header
+    geometryRDD.setGeometryRDD(rdd)
+    geometryRDD
+  }
+
+  def filterByGeometryType(geometryType: Class[_], inputGeometryRDD: GeometryRDD_Header): GeometryRDD_Header = {
+    val rdd = inputGeometryRDD.getGeometryRDD.filter(geometry => {
+      geometry.getClass == geometryType
+    })
+
+    val geometryRDD = new GeometryRDD_Header
+    geometryRDD.setGeometryRDD(rdd)
+    geometryRDD
+  }
+}
