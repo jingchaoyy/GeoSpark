@@ -52,6 +52,7 @@ public class GeometryReaderUtil_Header {
   /** suffix of index file */
   public final static String SHX_SUFFIX = ".shx";
 
+  public final static List<String> headerName = new ArrayList<>();
 
   public static Geometry readGeometryWithAttributes(FSDataInputStream shpDataInputStream,
                                                     FSDataInputStream dbfDataInputStream,
@@ -153,12 +154,43 @@ public class GeometryReaderUtil_Header {
 
   public static String truncate(String value, int length) {
     // Ensure String length is longer than requested size.
+
     if (value.length() > length) {
-      return value.substring(0, length);
+      String tru = value.substring(0, length);
+      if (headerName.contains(tru)) {
+        headerName.add(tru.substring(0, length-2) + "_1");
+        return tru.substring(0, length-2) + "_1";
+      }
+      else {
+        headerName.add(tru);
+        return tru;
+      }
     } else {
-      return value;
+      if (headerName.contains(value)){
+        if (value.length() > length-2){
+          headerName.add(value.substring(0, length-2) + "_1");
+          return value.substring(0, length-2) + "_1";
+        }
+        else{
+          headerName.add(value + "_1");
+          return value + "_1";
+        }
+      }
+      else{
+        headerName.add(value);
+        return value;
+      }
     }
   }
+
+//  public static String truncate(String value, int length) {
+//    // Ensure String length is longer than requested size.
+//
+//    if (value.length() > length)
+//      return value.substring(0, length);
+//    else
+//        return value;
+//  }
 
   public static void saveAsShapefile(String filepath, List<Geometry> geometries, String crs, String header)
       throws IOException, FactoryException {
@@ -187,7 +219,8 @@ public class GeometryReaderUtil_Header {
 
     List<String> headerList = Arrays.asList(header.split("\t"));
     for (int j = 0; j < headerList.size(); j++){
-      tb.add(headerList.get(j), String.class);
+      String tru = truncate(headerList.get(j),10);
+      tb.add(tru, String.class);
     }
 
     ds.createSchema(tb.buildFeatureType());
@@ -212,9 +245,9 @@ public class GeometryReaderUtil_Header {
       List<String> usrData = Arrays.asList(geometries.get(i).getUserData().toString().split("\t"));
       for (int k = 0; k < usrData.size(); k++){
         if (usrData.get(k) != null)
-          feature.setAttribute(truncate(headerList.get(k), 10), usrData.get(k));
+          feature.setAttribute(headerName.get(k), usrData.get(k));
         else
-          feature.setAttribute(truncate(headerList.get(k), 10), " ");
+          feature.setAttribute(headerName.get(k), " ");
       }
 
       writer.write();
