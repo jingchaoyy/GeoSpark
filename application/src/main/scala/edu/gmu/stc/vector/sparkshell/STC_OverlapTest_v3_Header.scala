@@ -98,7 +98,7 @@ object STC_OverlapTest_v3_Header extends Logging{
     val bdfFilePath2 = shapeFileMeta2.getFilePath + GeometryReaderUtil_Header.DBF_SUFFIX
     val header2 = GeometryReaderUtil_Header.getDbfHeader(bdfFilePath2)
 
-    val header = String.join("\tt1_",header1) + "\t"+ String.join("\tt2_",header2)
+    val header = String.join("\t",header1) + "\t"+ String.join("\t",header2)
 //    print("$$$$$$$$$$$$$$$$$$$$$", header)
 
     val geometryRDD2 = new GeometryRDD_Header
